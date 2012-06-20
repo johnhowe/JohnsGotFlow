@@ -77,10 +77,7 @@ void initialise(void)
 
         /* Initialise I/O ports */
         P1OUT = 0;
-        P1DIR |= ( DISPLAY_CS_PIN | MAX31855_CS_PIN | MOSI_PIN | CLK_PIN | ACCEL_PWR ); // Set output pins
-        P1DIR &= ~( ACCEL_ADC ); // Set input pins
-        ADC10AE0 |= ACCEL_ADC; // Enable ADC
-        P1OUT |= ACCEL_PWR; // Power on the accelerometer and display
+        P1DIR |= ( DISPLAY_CS_PIN | MAX31855_CS_PIN | MOSI_PIN | CLK_PIN ); // Set output pins
 
         _BIS_SR(GIE); // Global interrupt enable
 
