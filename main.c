@@ -18,6 +18,7 @@
 
 
 #include <msp430x20x2.h>
+#include "config.h"
 
 //In uniarch there is no more signal.h to sugar coat the interrupts definition, so we do it here
 #define interrupt(x) void __attribute__((interrupt (x)))
