@@ -12,3 +12,6 @@
 *.a
 
 *~
+*.swp
+main.elf
+main.lst
