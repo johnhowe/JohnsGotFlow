@@ -17,12 +17,13 @@
  */
 
 
-#include <msp430x20x2.h>
+#include "msp430g2211.h"
 #include "config.h"
 
 //In uniarch there is no more signal.h to sugar coat the interrupts definition, so we do it here
 #define interrupt(x) void __attribute__((interrupt (x)))
 
+#define CCR0_1KHZ 983
 
 #define true 1
 #define false 0
@@ -30,7 +31,8 @@
 #define TICK_HZ 1000
 
 void initialise(void);
-void spiBang(short chipSelectPin, unsigned char byte);
+void spiWrite(short chipSelectPin, unsigned char byte);
+short spiRead(short chipSelectPin, short nBits);
 void display(unsigned short number);
 void clearDisplay(void);
 
@@ -42,12 +44,12 @@ int main(void)
 {
         initialise();
 
-        unsigned long nextRefreshTime;
-
+        unsigned long nextRefreshTime = 0;
+        signed short temperature = 0;
         for (;;) {
                 if (ticks >= nextRefreshTime) {
                         nextRefreshTime += TICK_HZ / REFRESH_HZ;
-
+                        temperature = spiRead(MAX31855_CS_PIN, 14);
                 }
 
                 LPM1; // Put the device into sleep mode 1
@@ -72,12 +74,12 @@ void initialise(void)
         TACTL |= TASSEL_2; // SMCLK clock source
         TACTL |= ID_0; // Divide input clock by 1
         TACTL |= MC_1; // Timer up to CCR0 mode
-        TACCR0 = 980; // Tuned to interrupt at 1ms intervals for 1Mhz timer
+        TACCR0 = CCR0_1KHZ; // Tuned to interrupt at 1ms intervals for 1Mhz timer
         TACTL |= TAIE; // Enable interrupt
 
         /* Initialise I/O ports */
         P1OUT = 0;
-        P1DIR |= ( DISPLAY_CS_PIN | MAX31855_CS_PIN | MOSI_PIN | CLK_PIN ); // Set output pins
+        P1DIR |= ( DISPLAY_CS_PIN | MAX31855_CS_PIN | MOSI_PIN | CLK_PIN | BIT1); // Set output pins
 
         _BIS_SR(GIE); // Global interrupt enable
 
@@ -123,23 +125,23 @@ void display(unsigned short number)
                         }
                 }
 
-                spiBang(DISPLAY_CS_PIN, RESET);
+                spiWrite(DISPLAY_CS_PIN, RESET);
 
-                spiBang(DISPLAY_CS_PIN, DECIMAL); // Display the decimal point
-                spiBang(DISPLAY_CS_PIN, DECIMAL2);
+                spiWrite(DISPLAY_CS_PIN, DECIMAL); // Display the decimal point
+                spiWrite(DISPLAY_CS_PIN, DECIMAL2);
 
                 if (first == 0) {
-                        spiBang(DISPLAY_CS_PIN, ' ');
+                        spiWrite(DISPLAY_CS_PIN, ' ');
                 } else {
-                        spiBang(DISPLAY_CS_PIN, first);
+                        spiWrite(DISPLAY_CS_PIN, first);
                 }
                 if (first == 0 && second == 0) {
-                        spiBang(DISPLAY_CS_PIN, ' ');
+                        spiWrite(DISPLAY_CS_PIN, ' ');
                 } else {
-                        spiBang(DISPLAY_CS_PIN, second);
+                        spiWrite(DISPLAY_CS_PIN, second);
                 }
-                spiBang(DISPLAY_CS_PIN, third);
-                spiBang(DISPLAY_CS_PIN, fourth);
+                spiWrite(DISPLAY_CS_PIN, third);
+                spiWrite(DISPLAY_CS_PIN, fourth);
         }
         lastNumber = number;
 }
@@ -149,27 +151,39 @@ void display(unsigned short number)
  */
 void clearDisplay(void)
 {
-        spiBang(DISPLAY_CS_PIN, RESET);
-        spiBang(DISPLAY_CS_PIN, ' ');
-        spiBang(DISPLAY_CS_PIN, ' ');
-        spiBang(DISPLAY_CS_PIN, ' ');
-        spiBang(DISPLAY_CS_PIN, ' ');
-        spiBang(DISPLAY_CS_PIN, DECIMAL);
-        spiBang(DISPLAY_CS_PIN, 0);
+        spiWrite(DISPLAY_CS_PIN, RESET);
+        spiWrite(DISPLAY_CS_PIN, ' ');
+        spiWrite(DISPLAY_CS_PIN, ' ');
+        spiWrite(DISPLAY_CS_PIN, ' ');
+        spiWrite(DISPLAY_CS_PIN, ' ');
+        spiWrite(DISPLAY_CS_PIN, DECIMAL);
+        spiWrite(DISPLAY_CS_PIN, 0);
 
-        spiBang(DISPLAY_CS_PIN, BRIGHTNESS);
-        spiBang(DISPLAY_CS_PIN, 0xff);
+        spiWrite(DISPLAY_CS_PIN, BRIGHTNESS);
+        spiWrite(DISPLAY_CS_PIN, 0xff);
 }
+
+
+void assertPin(short pin)
+{
+    P1OUT &= ~pin;
+}
+
+void deassertPin(short pin)
+{
+    P1OUT |= pin;
+}
+
 
 /**
  * Bit-bangs a byte over SPI
  *
  * CPOL = 0, CPHA = 0
  */
-void spiBang(short chipSelectPin, unsigned char byte)
+void spiWrite(short chipSelectPin, unsigned char byte)
 {
-        // Enable the SPI device
-        P1OUT &= ~chipSelectPin;
+        assertPin(chipSelectPin);
+
         // TX byte one bit at a time, starting with most significant bit
         short bit;
         for (bit = 0; bit < 8; bit++) {
@@ -185,7 +199,27 @@ void spiBang(short chipSelectPin, unsigned char byte)
                 P1OUT |= CLK_PIN;
                 P1OUT &= ~CLK_PIN;
         }
-        P1OUT |= chipSelectPin;
+        deassertPin(chipSelectPin);
+}
+
+short spiRead(short chipSelectPin, short nBits)
+{
+        assertPin(chipSelectPin);
+
+        short data = 0;
+        short i;
+        for (i = 0; i < nBits; i++) {
+                P1OUT |= CLK_PIN; // rising clock edge
+                if (P1IN & MISO_PIN) {
+                        data |= 0x01;
+                        //data++;
+                }
+                data <<= 1;
+                P1OUT &= ~CLK_PIN; // falling clock edge
+        }
+        deassertPin(chipSelectPin);
+
+        return data;
 }
 
 
@@ -199,6 +233,9 @@ interrupt(TIMERA1_VECTOR) serviceTimerA(void)
         TACTL &= ~TAIFG; // Clear TimerA interrupt flag
         LPM1_EXIT; // Exit low power mode
         ticks++; // Update clock
+
+        assertPin(BIT1);
+        deassertPin(BIT1);
 }
 
 
