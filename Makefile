@@ -55,4 +55,5 @@ clean:
 	-rm -f $(PROG).elf $(PROG).lst $(OBJS)
 
 install:        $(PROG).elf
-	$
+	        $(MSPDEBUG) -n rf2500 "prog $(PROG).elf"
+	
