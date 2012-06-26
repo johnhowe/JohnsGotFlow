@@ -8,7 +8,8 @@
 #define MAX31855_CS_PIN         BIT2    // Chip select for thermocouple IC
 #define DISPLAY_CS_PIN          BIT3    // Chip select for display
 #define MOSI_PIN                BIT4    // Master out, slave in
-#define CLK_PIN                 BIT5    // Clock
+#define MISO_PIN                BIT5    // Master in, slave out
+#define CLK_PIN                 BIT6    // Clock
 
 /* Display commands */
 #define DECIMAL                 (0x77)  // Follow with a decimal point command
